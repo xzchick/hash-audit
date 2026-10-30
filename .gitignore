@@ -1,0 +1,15 @@
+__pycache__/
+*.py[cod]
+.venv/
+*.egg-info/
+build/
+dist/
+hash-audit-runs/
+
+# Local inputs and recovered secrets
+my-*.txt
+demo-*/
+*.pot
+*.rec
+.env
+.DS_Store

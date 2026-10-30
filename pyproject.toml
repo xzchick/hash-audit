@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "local-hash-audit"
+version = "0.1.0"
+description = "Local, terminal-based hash auditing and authorized password recovery"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+dependencies = []
+
+[project.scripts]
+hash-audit = "hash_audit.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["hash_audit*"]
