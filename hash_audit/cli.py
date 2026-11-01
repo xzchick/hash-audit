@@ -274,7 +274,7 @@ def verify_windows_sddl(sddl: str, expected_sid: str, is_dir: bool = False) -> b
     owner_part = sddl[:dacl_idx]
     dacl_part = sddl[dacl_idx:]
     allowed = {expected_sid.upper(), "SY", "BA", "S-1-5-18", "S-1-5-32-544"}
-    owner_match = re.search(r"O:([^D(]+)", owner_part)
+    owner_match = re.search(r"O:(S-1-[0-9-]+|[A-Za-z]{2})", owner_part)
     if not owner_match:
         raise PermissionError(f"Windows security descriptor missing owner: {sddl}")
     owner_trustee = owner_match.group(1).strip().upper()
