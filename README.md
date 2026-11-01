@@ -31,9 +31,17 @@ sudo apt install python3 python3-venv hashcat
 
 Hashcat documents this [package installation route](https://hashcat.net/wiki/doku.php?id=frequently_asked_questions#how_do_i_install_hashcat), but distribution packages can lag upstream. For John, install **Jumbo**, which supports more formats and options than core John; a package named `john` does not necessarily provide Jumbo. Follow the [Openwall downloads and build instructions](https://www.openwall.com/john/) when your distribution does not provide a suitable build. Openwall recommends its current development snapshot over the older 1.9.0-jumbo-1 source release.
 
-On Windows, use WSL with a Linux installation for this CLI. GPU availability depends on your WSL and driver setup. Native Windows process and permission behavior has not been validated.
+On Windows (PowerShell), install Python 3.10+ and place `hashcat.exe` and/or John Jumbo (`john.exe`) on your `PATH`, or use WSL:
 
-From this project's directory:
+```powershell
+py -3 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install .
+hash-audit doctor
+hash-audit --help
+```
+
+From this project's directory on macOS or Linux:
 
 ```sh
 python3 -m venv .venv
@@ -142,7 +150,7 @@ hash-audit show my-run-directory
 
 The pot file is isolated per run, so results are not silently taken from a global password cache. There is no automatic resume command; start a new run with a new output directory. Interrupted engines may leave their own checkpoint files.
 
-Results, pot files, and terminal output can contain plaintext passwords. On POSIX systems the run directory is created with mode `0700` and files with mode `0600`; these permissions do not encrypt the data. Keep results out of shared folders and version control. Windows permissions are controlled by Windows ACLs. Engine or driver caches can still be stored in their standard system locations.
+Results, pot files, and terminal output can contain plaintext passwords. On POSIX systems the run directory is created with mode `0700` and files with mode `0600`; on Windows, explicit protected NTFS DACLs (`D:P`) restrict the run directory and wrapper-created job files to the current user SID, `SYSTEM`, and `Administrators`. These permissions do not encrypt the data. Keep results out of shared folders and version control. Engine or driver caches can still be stored in their standard system locations.
 
 | CLI exit code | Meaning |
 | --- | --- |

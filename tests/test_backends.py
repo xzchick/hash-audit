@@ -85,7 +85,7 @@ class ProcessTest(unittest.TestCase):
 
     def run_script(self, source, extra=(), max_seconds=10):
         script = self.root / "backend fixture.py"
-        script.write_text(source)
+        script.write_text(source, encoding="utf-8")
         output = io.StringIO()
         with contextlib.redirect_stdout(output):
             result = run_command([sys.executable, str(script), *extra], self.root, 1, max_seconds)
@@ -93,7 +93,7 @@ class ProcessTest(unittest.TestCase):
 
     def test_real_process_never_invokes_shell_and_escapes_output(self):
         payload = "; touch INJECTED; $(touch INJECTED)"
-        result, output = self.run_script("import sys\nprint(sys.argv[1])\nprint('\\x1b[31mcolored\\u202e')\n", [payload])
+        result, output = self.run_script("import sys\nsys.stdout.reconfigure(encoding='utf-8')\nprint(sys.argv[1])\nprint('\\x1b[31mcolored\\u202e')\n", [payload])
         self.assertEqual(result.returncode, 0)
         self.assertIn(payload, output)
         self.assertIn("\\x1b[31m", output)

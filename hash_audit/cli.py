@@ -51,7 +51,7 @@ def regular_file(value: str | Path) -> Path:
 def bounded_read(value: str | Path, limit: int) -> bytes:
     path = regular_file(value)
     # O_NONBLOCK also prevents a changed path from hanging on a FIFO at open.
-    descriptor = os.open(path, os.O_RDONLY | getattr(os, "O_NONBLOCK", 0))
+    descriptor = os.open(path, os.O_RDONLY | getattr(os, "O_NONBLOCK", 0) | getattr(os, "O_BINARY", 0))
     with os.fdopen(descriptor, "rb") as source:
         info = os.fstat(source.fileno())
         if not stat.S_ISREG(info.st_mode):
@@ -111,8 +111,294 @@ def select_format(rows: list[tuple[int, str]], requested: str) -> HashFormat:
     return FORMATS[common.pop()]
 
 
+def _is_reparse_or_symlink(path: Path) -> bool:
+    if path.is_symlink():
+        return True
+    is_junc = getattr(path, "is_junction", None)
+    if callable(is_junc) and is_junc():
+        return True
+    try:
+        st = os.lstat(path)
+    except OSError:
+        return False
+    reparse = getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0x400)
+    return bool(getattr(st, "st_file_attributes", 0) & reparse)
+
+
+def windows_user_sid() -> str:
+    if os.name != "nt":
+        raise PermissionError("Windows SID queries require Windows")
+    import ctypes
+    from ctypes import wintypes
+
+    advapi32 = ctypes.WinDLL("advapi32", use_last_error=True)
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+
+    TOKEN_QUERY = 0x0008
+    TokenUser = 1
+
+    class SID_AND_ATTRIBUTES(ctypes.Structure):
+        _fields_ = [("Sid", wintypes.LPVOID), ("Attributes", wintypes.DWORD)]
+
+    class TOKEN_USER(ctypes.Structure):
+        _fields_ = [("User", SID_AND_ATTRIBUTES)]
+
+    kernel32.GetCurrentProcess.argtypes = []
+    kernel32.GetCurrentProcess.restype = wintypes.HANDLE
+    advapi32.OpenProcessToken.argtypes = [wintypes.HANDLE, wintypes.DWORD, ctypes.POINTER(wintypes.HANDLE)]
+    advapi32.OpenProcessToken.restype = wintypes.BOOL
+    advapi32.GetTokenInformation.argtypes = [
+        wintypes.HANDLE, ctypes.c_int, wintypes.LPVOID, wintypes.DWORD, ctypes.POINTER(wintypes.DWORD),
+    ]
+    advapi32.GetTokenInformation.restype = wintypes.BOOL
+    advapi32.ConvertSidToStringSidW.argtypes = [wintypes.LPVOID, ctypes.POINTER(wintypes.LPWSTR)]
+    advapi32.ConvertSidToStringSidW.restype = wintypes.BOOL
+    kernel32.LocalFree.argtypes = [wintypes.HLOCAL]
+    kernel32.LocalFree.restype = wintypes.HLOCAL
+    kernel32.CloseHandle.argtypes = [wintypes.HANDLE]
+    kernel32.CloseHandle.restype = wintypes.BOOL
+
+    token = wintypes.HANDLE()
+    if not advapi32.OpenProcessToken(kernel32.GetCurrentProcess(), TOKEN_QUERY, ctypes.byref(token)):
+        raise PermissionError(f"OpenProcessToken failed: {ctypes.get_last_error()}")
+    try:
+        needed = wintypes.DWORD(0)
+        advapi32.GetTokenInformation(token, TokenUser, None, 0, ctypes.byref(needed))
+        if not needed.value:
+            raise PermissionError("GetTokenInformation failed to return buffer size")
+        buf = ctypes.create_string_buffer(needed.value)
+        if not advapi32.GetTokenInformation(token, TokenUser, buf, needed, ctypes.byref(needed)):
+            raise PermissionError(f"GetTokenInformation failed: {ctypes.get_last_error()}")
+        user = ctypes.cast(buf, ctypes.POINTER(TOKEN_USER)).contents
+        sid_str = wintypes.LPWSTR()
+        if not advapi32.ConvertSidToStringSidW(user.User.Sid, ctypes.byref(sid_str)):
+            raise PermissionError(f"ConvertSidToStringSidW failed: {ctypes.get_last_error()}")
+        try:
+            value = sid_str.value
+        finally:
+            kernel32.LocalFree(sid_str)
+        if not value or not value.startswith("S-1-"):
+            raise PermissionError("Invalid Windows user SID")
+        return value
+    finally:
+        kernel32.CloseHandle(token)
+
+
+def windows_sddl(path: str | Path) -> str:
+    if os.name != "nt":
+        raise PermissionError("Windows SDDL queries require Windows")
+    import ctypes
+    from ctypes import wintypes
+
+    advapi32 = ctypes.WinDLL("advapi32", use_last_error=True)
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+
+    SE_FILE_OBJECT = 1
+    OWNER_SECURITY_INFORMATION = 0x00000001
+    DACL_SECURITY_INFORMATION = 0x00000004
+    SDDL_REVISION_1 = 1
+
+    advapi32.GetNamedSecurityInfoW.argtypes = [
+        wintypes.LPWSTR, ctypes.c_int, wintypes.DWORD,
+        ctypes.POINTER(wintypes.LPVOID), ctypes.POINTER(wintypes.LPVOID),
+        ctypes.POINTER(wintypes.LPVOID), ctypes.POINTER(wintypes.LPVOID),
+        ctypes.POINTER(wintypes.LPVOID),
+    ]
+    advapi32.GetNamedSecurityInfoW.restype = wintypes.DWORD
+    advapi32.ConvertSecurityDescriptorToStringSecurityDescriptorW.argtypes = [
+        wintypes.LPVOID, wintypes.DWORD, wintypes.DWORD,
+        ctypes.POINTER(wintypes.LPWSTR), ctypes.POINTER(wintypes.ULONG),
+    ]
+    advapi32.ConvertSecurityDescriptorToStringSecurityDescriptorW.restype = wintypes.BOOL
+    kernel32.LocalFree.argtypes = [wintypes.HLOCAL]
+    kernel32.LocalFree.restype = wintypes.HLOCAL
+
+    sd = wintypes.LPVOID()
+    err = advapi32.GetNamedSecurityInfoW(
+        str(path), SE_FILE_OBJECT, OWNER_SECURITY_INFORMATION | DACL_SECURITY_INFORMATION,
+        None, None, None, None, ctypes.byref(sd),
+    )
+    if err != 0:
+        raise PermissionError(f"GetNamedSecurityInfoW failed with error {err}")
+    try:
+        sddl_ptr = wintypes.LPWSTR()
+        if not advapi32.ConvertSecurityDescriptorToStringSecurityDescriptorW(
+            sd, SDDL_REVISION_1, OWNER_SECURITY_INFORMATION | DACL_SECURITY_INFORMATION,
+            ctypes.byref(sddl_ptr), None,
+        ):
+            raise PermissionError(f"ConvertSecurityDescriptorToStringSecurityDescriptorW failed: {ctypes.get_last_error()}")
+        try:
+            return sddl_ptr.value or ""
+        finally:
+            kernel32.LocalFree(sddl_ptr)
+    finally:
+        kernel32.LocalFree(sd)
+
+
+def resolve_windows_sid(trustee: str) -> str:
+    trustee = trustee.strip().upper()
+    if trustee.startswith("S-1-") or os.name != "nt":
+        return trustee
+    import ctypes
+    from ctypes import wintypes
+
+    advapi32 = ctypes.WinDLL("advapi32", use_last_error=True)
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    advapi32.ConvertStringSidToSidW.argtypes = [wintypes.LPWSTR, ctypes.POINTER(wintypes.LPVOID)]
+    advapi32.ConvertStringSidToSidW.restype = wintypes.BOOL
+    advapi32.ConvertSidToStringSidW.argtypes = [wintypes.LPVOID, ctypes.POINTER(wintypes.LPWSTR)]
+    advapi32.ConvertSidToStringSidW.restype = wintypes.BOOL
+    kernel32.LocalFree.argtypes = [wintypes.HLOCAL]
+    kernel32.LocalFree.restype = wintypes.HLOCAL
+
+    sid = wintypes.LPVOID()
+    if not advapi32.ConvertStringSidToSidW(trustee, ctypes.byref(sid)):
+        return trustee
+    try:
+        sid_str = wintypes.LPWSTR()
+        if not advapi32.ConvertSidToStringSidW(sid, ctypes.byref(sid_str)):
+            return trustee
+        try:
+            return (sid_str.value or trustee).upper()
+        finally:
+            kernel32.LocalFree(sid_str)
+    finally:
+        kernel32.LocalFree(sid)
+
+
+def verify_windows_sddl(sddl: str, expected_sid: str, is_dir: bool = False) -> bool:
+    import re
+    if "D:P" not in sddl:
+        raise PermissionError(f"Windows DACL is not protected against inheritance: {sddl}")
+    dacl_idx = sddl.index("D:P")
+    owner_part = sddl[:dacl_idx]
+    dacl_part = sddl[dacl_idx:]
+    allowed = {expected_sid.upper(), "SY", "BA", "S-1-5-18", "S-1-5-32-544"}
+    owner_match = re.search(r"O:(S-1-[0-9-]+|[A-Za-z]{2})", owner_part)
+    if not owner_match:
+        raise PermissionError(f"Windows security descriptor missing owner: {sddl}")
+    owner_trustee = owner_match.group(1).strip().upper()
+    if owner_trustee not in allowed and resolve_windows_sid(owner_trustee) not in allowed:
+        raise PermissionError(f"Unexpected Windows owner in security descriptor: {owner_trustee}")
+    aces = re.findall(r"\(([^)]+)\)", dacl_part)
+    if not aces:
+        raise PermissionError(f"Windows DACL has no ACEs: {sddl}")
+    user_granted = False
+    expected_upper = expected_sid.upper()
+    for ace in aces:
+        fields = ace.split(";")
+        if len(fields) != 6:
+            raise PermissionError(f"Malformed ACE in Windows DACL: {ace}")
+        ace_type, ace_flags, rights, obj_guid, inherit_guid, trustee = [f.strip().upper() for f in fields]
+        resolved = trustee if trustee in allowed else resolve_windows_sid(trustee)
+        if ace_type != "A" or obj_guid or inherit_guid or resolved not in allowed:
+            raise PermissionError(f"Disallowed ACE in Windows DACL: {ace}")
+        if resolved == expected_upper or (
+            expected_upper.startswith("S-1-5-21-") and expected_upper.endswith("-500") and trustee == "LA"
+        ):
+            if rights != "FA":
+                raise PermissionError(f"Insufficient rights for user in Windows DACL: {ace}")
+            if is_dir and ("OI" not in ace_flags or "CI" not in ace_flags):
+                raise PermissionError(f"Directory ACE missing OICI inheritance flags: {ace}")
+            user_granted = True
+    if not user_granted:
+        raise PermissionError(f"Current user SID {expected_sid} missing from Windows DACL: {sddl}")
+    return True
+
+
+def _enforce_windows_acl(path: Path, is_dir: bool = False) -> None:
+    if _is_reparse_or_symlink(path):
+        raise PermissionError(f"Refusing to set permissions on symlink or reparse point: {path}")
+    sid = windows_user_sid()
+    inherit = "OICI;" if is_dir else ";"
+    sddl = f"D:P(A;{inherit}FA;;;{sid})(A;{inherit}FA;;;SY)(A;{inherit}FA;;;BA)"
+    import ctypes
+    from ctypes import wintypes
+
+    advapi32 = ctypes.WinDLL("advapi32", use_last_error=True)
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+
+    SDDL_REVISION_1 = 1
+    SE_FILE_OBJECT = 1
+    DACL_SECURITY_INFORMATION = 0x00000004
+    PROTECTED_DACL_SECURITY_INFORMATION = 0x80000000
+
+    advapi32.ConvertStringSecurityDescriptorToSecurityDescriptorW.argtypes = [
+        wintypes.LPWSTR, wintypes.DWORD, ctypes.POINTER(wintypes.LPVOID), ctypes.POINTER(wintypes.ULONG),
+    ]
+    advapi32.ConvertStringSecurityDescriptorToSecurityDescriptorW.restype = wintypes.BOOL
+    advapi32.GetSecurityDescriptorDacl.argtypes = [
+        wintypes.LPVOID, ctypes.POINTER(wintypes.BOOL),
+        ctypes.POINTER(wintypes.LPVOID), ctypes.POINTER(wintypes.BOOL),
+    ]
+    advapi32.GetSecurityDescriptorDacl.restype = wintypes.BOOL
+    advapi32.SetNamedSecurityInfoW.argtypes = [
+        wintypes.LPWSTR, ctypes.c_int, wintypes.DWORD,
+        wintypes.LPVOID, wintypes.LPVOID, wintypes.LPVOID, wintypes.LPVOID,
+    ]
+    advapi32.SetNamedSecurityInfoW.restype = wintypes.DWORD
+    kernel32.LocalFree.argtypes = [wintypes.HLOCAL]
+    kernel32.LocalFree.restype = wintypes.HLOCAL
+
+    sd = wintypes.LPVOID()
+    if not advapi32.ConvertStringSecurityDescriptorToSecurityDescriptorW(sddl, SDDL_REVISION_1, ctypes.byref(sd), None):
+        raise PermissionError(f"ConvertStringSecurityDescriptorToSecurityDescriptorW failed: {ctypes.get_last_error()}")
+    try:
+        present = wintypes.BOOL()
+        dacl = wintypes.LPVOID()
+        defaulted = wintypes.BOOL()
+        if not advapi32.GetSecurityDescriptorDacl(sd, ctypes.byref(present), ctypes.byref(dacl), ctypes.byref(defaulted)) or not present.value:
+            raise PermissionError(f"GetSecurityDescriptorDacl failed: {ctypes.get_last_error()}")
+        err = advapi32.SetNamedSecurityInfoW(
+            str(path), SE_FILE_OBJECT, DACL_SECURITY_INFORMATION | PROTECTED_DACL_SECURITY_INFORMATION,
+            None, None, dacl, None,
+        )
+        if err != 0:
+            raise PermissionError(f"SetNamedSecurityInfoW failed with error {err}")
+    finally:
+        kernel32.LocalFree(sd)
+    if _is_reparse_or_symlink(path):
+        raise PermissionError(f"Path became a symlink or reparse point during ACL enforcement: {path}")
+    verify_windows_sddl(windows_sddl(path), sid, is_dir=is_dir)
+
+
+def private_dir(path: Path) -> Path:
+    if _is_reparse_or_symlink(path):
+        raise ValueError(f"refusing symbolic link or reparse point: {path}")
+    path.mkdir(parents=True, exist_ok=True, mode=0o700)
+    if _is_reparse_or_symlink(path) or not path.is_dir():
+        raise ValueError(f"expected a private directory: {path}")
+    if os.name == "nt":
+        _enforce_windows_acl(path, is_dir=True)
+    else:
+        os.chmod(path, 0o700)
+        if stat.S_IMODE(path.lstat().st_mode) != 0o700:
+            raise PermissionError(f"Could not enforce 0700 permissions on {path}")
+    return path
+
+
+def private_file(path: Path) -> Path:
+    if _is_reparse_or_symlink(path) or not path.is_file():
+        raise ValueError(f"expected a regular private file: {path}")
+    if os.name == "nt":
+        _enforce_windows_acl(path, is_dir=False)
+    else:
+        os.chmod(path, 0o600)
+        if stat.S_IMODE(path.lstat().st_mode) != 0o600:
+            raise PermissionError(f"Could not enforce 0600 permissions on {path}")
+    return path
+
+
 def private_write(path: Path, data: bytes) -> None:
-    descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    if _is_reparse_or_symlink(path):
+        raise ValueError(f"refusing symbolic link or reparse point: {path}")
+    descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_BINARY", 0), 0o600)
+    try:
+        private_file(path)
+    except Exception:
+        os.close(descriptor)
+        path.unlink(missing_ok=True)
+        raise
     with os.fdopen(descriptor, "wb") as target:
         target.write(data)
 
@@ -185,10 +471,11 @@ def recover(args: argparse.Namespace) -> int:
                           "max_seconds": args.max_seconds}, indent=2, ensure_ascii=True))
         return 0
     if not args.output_dir:
-        job.parent.mkdir(mode=0o700, exist_ok=True)
+        private_dir(job.parent)
     elif not job.parent.is_dir():
         raise ValueError("the output directory's parent must already exist")
     job.mkdir(mode=0o700)
+    private_dir(job)
     # Keep all persistent input/result files private, independently of user umask.
     snapshot = ("\n".join(normalized) + "\n").encode("ascii")
     private_write(job / "hashes.txt", snapshot)
@@ -274,7 +561,7 @@ def show(args: argparse.Namespace) -> int:
     if not job.is_dir():
         raise ValueError("job path must be a directory")
     for name in ("run.json", "hashes.txt", "recovered.pot"):
-        if (job / name).is_symlink():
+        if _is_reparse_or_symlink(job / name):
             raise ValueError(f"job file must not be a symbolic link: {name}")
     manifest = json.loads(bounded_read(job / "run.json", 1024 * 1024))
     if not isinstance(manifest, dict) or manifest.get("schema_version") != 1:

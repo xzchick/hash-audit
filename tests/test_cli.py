@@ -37,15 +37,24 @@ class CLITest(unittest.TestCase):
         return ("recover", self.hashes, "--format", "md5", "--wordlist", self.words,
                 "--output-dir", self.job, *extra)
 
-    def make_engine(self, returncode=0):
-        engine = self.root / "engine"
-        # This stub records a real subprocess invocation, without using a shell.
-        engine.write_text(
-            f"#!{sys.executable}\n"
+    def make_engine(self, returncode=0, name="engine"):
+        body = (
             "import json, pathlib, sys\n"
-            "pathlib.Path('called.json').write_text(json.dumps(sys.argv[1:]))\n"
+            "if sys.argv[1:] not in (['--version'], ['--list=build-info']):\n"
+            "    pathlib.Path('called.json').write_text(json.dumps(sys.argv[1:]))\n"
             "print('stub progress: 100%')\n"
-            f"sys.exit({returncode})\n", encoding="utf-8")
+            f"sys.exit({returncode})\n"
+        )
+        if os.name == "nt":
+            from pip._vendor.distlib.scripts import ScriptMaker
+            maker = ScriptMaker(str(self.root), str(self.root))
+            maker.executable = sys.executable
+            files = []
+            maker._write_script([name], maker._get_shebang("utf-8"), body.encode("utf-8"), files, "py")
+            return files[0]
+        engine = self.root / name
+        # This stub records a real subprocess invocation, without using a shell.
+        engine.write_text(f"#!{sys.executable}\n" + body, encoding="utf-8")
         engine.chmod(0o700)
         return str(engine)
 
@@ -126,7 +135,6 @@ class CLITest(unittest.TestCase):
         for value in ("?d?d", "Demo?l?H", "??hello?d", "`touch pwned`?d"):
             cli.validate_mask(value)
 
-    @unittest.skipUnless(os.name == "posix", "executable script fixture")
     def test_end_to_end_private_snapshot_literal_paths_and_manifest(self):
         unusual = self.root / "words $(touch pwned); `whoami`.txt"
         self.words.rename(unusual)
@@ -144,24 +152,43 @@ class CLITest(unittest.TestCase):
         self.assertEqual(json.loads((self.job / "called.json").read_text())[-1], str(unusual.resolve()))
         self.assertNotIn(self.digest, json.dumps(manifest["argv"]))
         self.assertFalse((self.job / "pwned").exists())
-        self.assertEqual(stat.S_IMODE(self.job.stat().st_mode), 0o700)
-        for name in ("hashes.txt", "run.json", "recovered.pot", "recovered.txt", "called.json"):
-            self.assertEqual(stat.S_IMODE((self.job / name).stat().st_mode), 0o600)
+        if os.name == "nt":
+            sid = cli.windows_user_sid()
+            self.assertTrue(cli.verify_windows_sddl(cli.windows_sddl(self.job), sid, is_dir=True))
+            for name in ("hashes.txt", "run.json", "recovered.pot", "recovered.txt"):
+                self.assertTrue(cli.verify_windows_sddl(cli.windows_sddl(self.job / name), sid, is_dir=False))
+            with self.assertRaises(PermissionError):
+                cli.verify_windows_sddl(f"O:{sid}D:P(A;;FA;;;{sid})(A;;FA;;;WD)", sid, is_dir=False)
+        else:
+            self.assertEqual(stat.S_IMODE(self.job.stat().st_mode), 0o700)
+            for name in ("hashes.txt", "run.json", "recovered.pot", "recovered.txt", "called.json"):
+                self.assertEqual(stat.S_IMODE((self.job / name).stat().st_mode), 0o600)
         self.hashes.write_text("modified source")
         with patch.object(cli, "find_backend", return_value=engine):
             self.assertEqual(self.invoke("show", self.job)[0], 0)
         (self.job / "hashes.txt").write_text("modified snapshot")
         self.assertEqual(self.invoke("show", self.job)[0], 2)
 
-    @unittest.skipUnless(os.name == "posix", "executable script fixture")
     def test_hashcat_exit_states_are_preserved(self):
         for result, expected_code, state in ((1, 3, "exhausted"), (255, 2, "failed")):
             with self.subTest(result=result):
                 self.job = self.root / f"job-{result}"
-                with patch.object(cli, "find_backend", return_value=self.make_engine(result)):
+                with patch.object(cli, "find_backend", return_value=self.make_engine(result, f"engine-{result}")):
                     self.assertEqual(self.invoke(*self.recover_args())[0], expected_code)
                 manifest = json.loads((self.job / "run.json").read_text())
                 self.assertEqual(manifest["state"], state)
+
+    def test_doctor_and_formats_cross_platform_discovery(self):
+        code, fmt_out, _ = self.invoke("formats", "--json")
+        self.assertEqual(code, 0)
+        self.assertEqual(len(json.loads(fmt_out)), 23)
+        self.make_engine(0, "hashcat")
+        self.make_engine(0, "john")
+        with patch.dict(os.environ, {"PATH": str(self.root)}, clear=False):
+            code, doc_out, _ = self.invoke("doctor")
+        self.assertEqual(code, 0)
+        self.assertIn("hashcat:", doc_out)
+        self.assertIn("john:", doc_out)
 
     def test_unsupported_john_combinations_fail_before_job_creation(self):
         code, _, _ = self.invoke("recover", self.hashes, "--format", "md5", "--backend", "john",
