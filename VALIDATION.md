@@ -7,7 +7,7 @@ Checked on October 29, 2026 with Python 3.14.4 on macOS.
 - Compiled official John Jumbo source locally (1.9.0-jumbo-1+bleeding-5184bc0b8c1, CPU build). Real recovery with fresh pot files succeeded for MD5, SHA-1, SHA-256, SHA-512, NTLM, MySQL323, MySQL41, phpass, bcrypt, and Django PBKDF2-SHA256 using synthetic or published demonstration hashes and a small candidate list.
 - Hashcat 7.1.2 accepted the generated commands but could not perform recovery because this environment exposed no usable Metal/OpenCL compute device. Hashcat result parsing with `--show` was verified for MD5 and salted SHA-256 using deliberately pre-seeded demonstration pot files. This is a parsing check, not evidence of Hashcat recovery.
 
-Other registered formats have validation and mapping checks but were not all exercised in real recovery runs. Modern WordPress mode 35500 needs a compatible newer Hashcat. Native Windows behavior was not tested; use WSL as documented.
+Other registered formats have validation and mapping checks but were not all exercised in real recovery runs. Modern WordPress mode 35500 needs a compatible newer Hashcat. Cross-platform CI validates installation, engine discovery, private output storage (POSIX `0700`/`0600` modes and Windows protected `D:P` NTFS DACLs), and subprocess orchestration on Ubuntu, Windows, and macOS.
 
 Reproduce automated tests from the project directory:
 
