@@ -103,6 +103,14 @@ def main() -> int:
             shutil.rmtree(d)
         d.mkdir(parents=True, exist_ok=True)
 
+    pyi_entry = pyi_spec / "hash_audit_entry.py"
+    pyi_entry.write_text(
+        "from hash_audit.cli import main\n"
+        "if __name__ == '__main__':\n"
+        "    raise SystemExit(main())\n",
+        encoding="utf-8",
+    )
+
     subprocess.run(
         [
             sys.executable, "-m", "PyInstaller",
@@ -112,7 +120,7 @@ def main() -> int:
             "--distpath", str(pyi_dist),
             "--workpath", str(pyi_work),
             "--specpath", str(pyi_spec),
-            str(ROOT / "hash_audit" / "__main__.py"),
+            str(pyi_entry),
         ],
         cwd=ROOT,
         check=True,
