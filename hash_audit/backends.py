@@ -70,7 +70,10 @@ def _hashcat_session(job_dir: Path) -> str:
 def _check_backend(backend: str, fmt: HashFormat) -> None:
     if backend not in {"hashcat", "john"}:
         raise ValueError("Backend must be hashcat or john.")
-    if backend == "john" and not fmt.john_format:
+    container = getattr(fmt, "container", False)
+    if backend == "hashcat" and (container or fmt.hashcat_mode is None):
+        raise ValueError(f"Format {fmt.key} is recovered through John only; use --backend john.")
+    if backend == "john" and not fmt.john_format and not container:
         raise ValueError(f"Format {fmt.key} is supported through Hashcat only.")
 
 
@@ -101,9 +104,12 @@ def build_command(
     if backend == "john":
         if mask is not None or rules is not None:
             raise ValueError("The John adapter supports wordlists only; use Hashcat for masks or rule files.")
-        return [
-            executable,
-            f"--format={fmt.john_format}",
+        argv = [executable]
+        # Container hashes let John auto-detect the exact variant (pkzip vs winzip,
+        # RAR3 vs RAR5, …); raw formats pin the John format explicitly.
+        if fmt.john_format:
+            argv.append(f"--format={fmt.john_format}")
+        argv += [
             f"--wordlist={_path(wordlist)}",
             f"--pot={pot}",
             f"--session={session}",
@@ -111,6 +117,7 @@ def build_command(
             "--no-log",
             _path(hashes),
         ]
+        return argv
     argv = [
         executable,
         "-m", str(fmt.hashcat_mode),
@@ -138,7 +145,11 @@ def show_command(
     _check_backend(backend, fmt)
     pot = _path(job_dir / "recovered.pot")
     if backend == "john":
-        return [executable, "--show", f"--format={fmt.john_format}", f"--pot={pot}", "--no-log", _path(hashes)]
+        argv = [executable, "--show"]
+        if fmt.john_format:
+            argv.append(f"--format={fmt.john_format}")
+        argv += [f"--pot={pot}", "--no-log", _path(hashes)]
+        return argv
     return [
         executable, "--show", "-m", str(fmt.hashcat_mode),
         f"--potfile-path={pot}", "--outfile-format=1,2",

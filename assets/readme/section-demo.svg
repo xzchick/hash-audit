@@ -15,13 +15,13 @@
     <ellipse cx="90" cy="66" rx="340" ry="76" fill="url(#rose)"/>
     <g fill="#a8c7ed" opacity=".3"><circle cx="620" cy="26" r="1"/><circle cx="780" cy="52" r="1"/><circle cx="970" cy="43" r="1.2"/><circle cx="450" cy="58" r=".8"/></g>
     <defs><filter id="glow" x="-20%" y="-60%" width="140%" height="220%"><feGaussianBlur stdDeviation="5"/></filter></defs>
-    <g class="flicker" filter="url(#glow)"><g transform="translate(28 23) scale(1.250)" fill="none" stroke="#35e8ff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3h6M10 3v6l-5.5 9.5A1.7 1.7 0 0 0 6 21h12a1.7 1.7 0 0 0 1.5-2.5L14 9V3"/><path d="M7 15h10"/></g>
-      <text x="74" y="48" font-size="27" font-weight="700" fill="#35e8ff" font-family="Arial, Helvetica, sans-serif">Try The Demo</text></g>
-    <g transform="translate(28 23) scale(1.250)" fill="none" stroke="#35e8ff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3h6M10 3v6l-5.5 9.5A1.7 1.7 0 0 0 6 21h12a1.7 1.7 0 0 0 1.5-2.5L14 9V3"/><path d="M7 15h10"/></g>
+    <g class="flicker" filter="url(#glow)"><g transform="translate(28 23) scale(1.250)" fill="none" stroke="#ff3db4" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3h6M10 3v6l-5.5 9.5A1.7 1.7 0 0 0 6 21h12a1.7 1.7 0 0 0 1.5-2.5L14 9V3"/><path d="M7 15h10"/></g>
+      <text x="74" y="48" font-size="27" font-weight="700" fill="#ff3db4" font-family="Arial, Helvetica, sans-serif">Try The Demo</text></g>
+    <g transform="translate(28 23) scale(1.250)" fill="none" stroke="#ff3db4" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3h6M10 3v6l-5.5 9.5A1.7 1.7 0 0 0 6 21h12a1.7 1.7 0 0 0 1.5-2.5L14 9V3"/><path d="M7 15h10"/></g>
     <text x="74" y="48" font-size="27" font-weight="700" letter-spacing=".4" fill="#f2f4ff" font-family="Arial, Helvetica, sans-serif">Try The Demo</text>
-    <text x="970" y="47" font-size="12.5" letter-spacing="2.4" font-weight="600" fill="#35e8ff" text-anchor="end" font-family="Arial, Helvetica, sans-serif">SYNTHETIC HASHES</text>
-    <path d="M284 39H806" stroke="#35e8ff" stroke-opacity=".25" stroke-width="1.5"/>
-    <g class="travel"><circle cx="284" cy="39" r="5" fill="#35e8ff" opacity=".3"/><circle cx="284" cy="39" r="2" fill="#fff"/></g>
+    <text x="970" y="47" font-size="12.5" letter-spacing="2.4" font-weight="600" fill="#ff3db4" text-anchor="end" font-family="Arial, Helvetica, sans-serif">SYNTHETIC HASHES</text>
+    <path d="M284 39H806" stroke="#ff3db4" stroke-opacity=".25" stroke-width="1.5"/>
+    <g class="travel"><circle cx="284" cy="39" r="5" fill="#ff3db4" opacity=".3"/><circle cx="284" cy="39" r="2" fill="#fff"/></g>
   </g>
   <rect x=".75" y=".75" width="998.5" height="74.5" rx="16" fill="none" stroke="url(#edge)" stroke-width="1.5"/>
 </svg>

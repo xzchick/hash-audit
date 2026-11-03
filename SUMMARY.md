@@ -5,6 +5,7 @@ Hash Audit is a terminal-only Python CLI for local, authorized password recovery
 ## Features
 
 - 23 registered formats, including MD5, SHA-1/256/512, NTLM, legacy MySQL, phpass, bcrypt, crypt, and salted digests.
+- Hash extraction from encrypted files (ZIP, RAR, KeePass) via John Jumbo's `*2john` helpers, recovered through John.
 - Dictionary recovery, Hashcat masks and rule files.
 - Live progress, dry-run previews, time limits, and interruption handling.
 - Isolated result directories, private permissions on POSIX, and safe terminal output.

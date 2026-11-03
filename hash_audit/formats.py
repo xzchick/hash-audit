@@ -18,8 +18,12 @@ from dataclasses import dataclass
 class HashFormat:
     key: str
     label: str
-    hashcat_mode: int
+    hashcat_mode: int | None
     john_format: str | None
+    # Container formats are hashes extracted from files (ZIP, Office, SSH keys,
+    # …). They are recovered through John, which auto-detects the exact variant,
+    # so john_format may be None and hashcat_mode is None.
+    container: bool = False
 
 
 _FORMATS = (
@@ -48,6 +52,40 @@ _FORMATS = (
     HashFormat("sha512-salt-pass", "SHA-512(salt + password)", 1720, None),
 )
 FORMATS: dict[str, HashFormat] = {item.key: item for item in _FORMATS}
+
+# Container formats hold a password hash extracted from a file by John Jumbo's
+# ``*2john`` helpers (see extractors.py). John auto-detects the exact variant,
+# so recovery is John-only. The tags are the distinctive ``$name$`` prefixes a
+# helper emits; a leading ``path:`` label from the helper is ignored on match.
+CONTAINER_TAGS: dict[str, tuple[str, ...]] = {
+    "zip": ("$zip2$", "$pkzip2$"),
+    "rar": ("$RAR3$", "$rar5$"),
+    "keepass": ("$keepass$",),
+}
+_CONTAINERS = (
+    HashFormat("zip", "ZIP archive (WinZip AES or legacy PKZIP)", None, None, container=True),
+    HashFormat("rar", "RAR archive (RAR3 or RAR5)", None, None, container=True),
+    HashFormat("keepass", "KeePass database (.kdbx)", None, None, container=True),
+)
+CONTAINERS: dict[str, HashFormat] = {item.key: item for item in _CONTAINERS}
+
+
+def lookup(key: str) -> HashFormat | None:
+    """Return a raw or container format by key, or None."""
+    return FORMATS.get(key) or CONTAINERS.get(key)
+
+
+def _container_ok(value: str, fmt: HashFormat) -> bool:
+    tags = CONTAINER_TAGS.get(fmt.key, ())
+    if not tags:
+        return False
+    body = value
+    head, separator, rest = value.partition(":")
+    # ``*2john`` prefixes a ``path:`` label; strip it, but never strip a colon
+    # that sits inside the hash body itself (those tags carry no '$' before it).
+    if separator and "$" not in head and "*" not in head:
+        body = rest
+    return body.startswith(tags)
 
 _HEX_LENGTHS = {"md5": 32, "sha1": 40, "sha256": 64, "sha512": 128,
                 "ntlm": 32, "mysql323": 16}
@@ -93,6 +131,8 @@ def validate(value: str, fmt: HashFormat) -> bool:
         return False
     if any(ord(char) < 32 or ord(char) > 126 for char in value):
         return False
+    if getattr(fmt, "container", False):
+        return CONTAINERS.get(fmt.key) == fmt and _container_ok(value, fmt)
     key = fmt.key
     if key not in FORMATS or FORMATS[key] != fmt:
         return False
@@ -147,6 +187,10 @@ def normalize(value: str, fmt: HashFormat, backend: str) -> str:
         raise ValueError("Backend must be hashcat or john.")
     if not validate(value, fmt):
         raise ValueError(f"Invalid {fmt.key} hash.")
+    if getattr(fmt, "container", False):
+        if backend != "john":
+            raise ValueError(f"{fmt.key} is an extracted file hash; recover it with --backend john.")
+        return value  # John consumes the extractor's output, label and all.
     if backend == "john" and fmt.john_format is None:
         raise ValueError(f"{fmt.key} is supported through Hashcat only.")
     if fmt.key == "mysql41":
