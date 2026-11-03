@@ -1,77 +1,273 @@
-# Hash Audit
+<p align="center">
+  <img src="assets/readme/hero.svg" width="100%" alt="Hash Audit: local, terminal-based hash auditing and authorized password recovery for macOS, Windows and Linux" />
+</p>
 
-![Hash Audit — Local. Terminal. Authorized.](assets/cover.png)
+<p align="center"><b>A terminal-only password recovery and hash auditing tool for hashes you own or are authorized to test.</b><br />
+It validates hash files, identifies plausible formats and drives Hashcat or John the Ripper Jumbo, entirely on your own machine.</p>
 
-**23 hash formats · Hashcat + John Jumbo · Python · MIT license**
+<p align="center">
+  <a href="https://github.com/xzchick/hash-audit/actions/workflows/tests.yml"><img src="https://github.com/xzchick/hash-audit/actions/workflows/tests.yml/badge.svg" alt="Cross-platform tests" /></a>
+</p>
+<p align="center">
+  <img src="https://img.shields.io/badge/macOS-supported-ff3db4?style=for-the-badge&logo=apple&logoColor=white&labelColor=050713" alt="macOS supported" />
+  <img src="https://img.shields.io/badge/Windows-supported-35e8ff?style=for-the-badge&logo=windows&logoColor=white&labelColor=050713" alt="Windows supported" />
+  <img src="https://img.shields.io/badge/Linux-supported-ac8cff?style=for-the-badge&logo=linux&logoColor=white&labelColor=050713" alt="Linux supported" /><br />
+  <img src="https://img.shields.io/badge/Python-3.10+-8547e8?style=flat-square&logo=python&logoColor=white&labelColor=050713" alt="Python 3.10 or newer" />
+  <img src="https://img.shields.io/badge/engines-Hashcat%20%2B%20John%20Jumbo-ff3db4?style=flat-square&labelColor=050713" alt="Hashcat and John Jumbo" />
+  <img src="https://img.shields.io/badge/formats-23-35e8ff?style=flat-square&labelColor=050713" alt="23 hash formats" />
+  <img src="https://img.shields.io/badge/license-MIT-ac8cff?style=flat-square&labelColor=050713" alt="MIT license" />
+</p>
 
-A fully terminal-based, local password recovery and hash auditing CLI for hashes you own or are authorized to test. It validates hash files, identifies plausible formats, and runs an installed Hashcat or John the Ripper Jumbo with explicit settings, progress output, and a separate results directory for each run.
+<p align="center">
+  <a href="#install"><b>Install</b></a> ·
+  <a href="#works-on">Compatibility</a> ·
+  <a href="#formats">Formats</a> ·
+  <a href="#demo">Demo</a> ·
+  <a href="#usage">Recover</a> ·
+  <a href="#safety">Safety</a> ·
+  <a href="#troubleshooting">Troubleshooting</a>
+</p>
 
-**Hashes are one-way.** Recovery works by hashing candidate passwords and looking for a match. A successful match does not establish that the candidate is the only possible original input. Strong passwords, slow password hashing, and large search spaces can make recovery impractical. There is no unlimited decryption mode or recovery guarantee.
+> [!IMPORTANT]
+> Use Hash Audit only with hashes you own or have explicit authorization to test. It performs offline recovery from local files. It has no online lookup, no account-login testing, no credential collection and no automatic wordlist downloads.
 
-This project performs offline recovery from local files. It has no online lookup service, account login testing, credential collection, or automatic wordlist downloads.
+**Hashes are one-way.** Recovery works by hashing candidate passwords and looking for a match. A match doesn't prove the candidate is the only possible original input, and strong passwords, slow password hashing and large search spaces can make recovery impractical. There is no unlimited decryption mode and no recovery guarantee.
 
-## Install
+<a name="features"></a>
+<img src="assets/readme/section-features.svg" width="100%" alt="What it does" />
 
-Python 3.10 or newer is required. The CLI has no third-party Python runtime dependencies. Install at least one recovery engine separately.
+<img src="assets/readme/features.svg" width="100%" alt="23 hash formats, two engines, wordlists and masks, safe by design, private results, authorized use only" />
 
-On macOS with Homebrew:
+<a name="works-on"></a>
+<img src="assets/readme/section-compat.svg" width="100%" alt="Works on macOS, Windows and Linux" />
+
+<p align="center">
+  <img src="assets/readme/os-macos.svg" width="32.5%" alt="macOS: Terminal, Homebrew engines, 0700/0600 result folders, Python 3.10+ or standalone" />
+  <img src="assets/readme/os-windows.svg" width="32.5%" alt="Windows: PowerShell, engines on PATH, NTFS ACL results, Python 3.10+ or standalone" />
+  <img src="assets/readme/os-linux.svg" width="32.5%" alt="Linux: any POSIX shell, apt/dnf engines, 0700/0600 result folders, Python 3.10+ or standalone" />
+</p>
+
+<img src="assets/readme/compat.svg" width="100%" alt="Feature compatibility by operating system" />
+
+<details>
+<summary><b>Compatibility table as text</b></summary>
+
+| Feature | macOS | Windows | Linux |
+|---|:---:|:---:|:---:|
+| Format detection and validation | ✅ | ✅ | ✅ |
+| 23 registered hash formats | ✅ | ✅ | ✅ |
+| Dictionary (wordlist) recovery | ✅ | ✅ | ✅ |
+| Hashcat masks and rule files | ✅ | ✅ | ✅ |
+| John the Ripper Jumbo recovery | ✅ | ✅ | ✅ |
+| Dry-run, time limits, clean stop | ✅ | ✅ | ✅ |
+| Private per-run results | `0700`/`0600` | NTFS ACL `D:P` | `0700`/`0600` |
+| Engine install route | Homebrew | `PATH` or WSL | `apt` / `dnf` |
+| No Python dependencies | ✅ | ✅ | ✅ |
+| Standalone bundle (draft v0.1.0) | arm64 | x86_64 | x86_64 |
+| Python package (`pip install .`) | ✅ | ✅ | ✅ |
+| Tested in CI on every push | ✅ | ✅ | ✅ |
+
+Masks and rule files are a Hashcat feature; the John wrapper supports wordlists only. Both engines run on all three systems.
+
+</details>
+
+### Requirements
+
+| | 🍎 macOS | 🪟 Windows | 🐧 Linux |
+|---|---|---|---|
+| **OS version** | macOS 13 Ventura or newer | Windows 10 22H2 or Windows 11 | A current x86_64 or arm64 distribution |
+| **Python** | 3.10 or newer (not needed for the standalone bundle) | same | same |
+| **Shell** | Terminal (zsh or bash) | PowerShell 5.1 or 7 | Any POSIX shell (sh, bash, zsh) |
+| **Engine** | At least one of Hashcat or John Jumbo | same | same |
+| **Hashcat GPU** | Metal, built in | NVIDIA or AMD driver, or CPU via OpenCL | NVIDIA or AMD driver, or CPU via OpenCL |
+| **Python deps** | None | None | None |
+
+> [!NOTE]
+> Hash Audit doesn't install or bundle the recovery engines, GPU drivers or wordlists. You install an engine yourself, and the tool orchestrates it. `hashcat -I` shows whether Hashcat has a usable compute device.
+
+<a name="install"></a>
+<img src="assets/readme/section-install.svg" width="100%" alt="Install" />
+
+You have two choices on every system: install the small Python package, or download a standalone bundle that needs no Python. Either way, install **at least one engine** (Hashcat and/or John Jumbo) separately.
+
+### 🍎 macOS
+
+With [Homebrew](https://brew.sh):
 
 ```sh
 brew install python hashcat john-jumbo
 ```
 
-These are the official Homebrew formulas for [Hashcat](https://formulae.brew.sh/formula/hashcat) and [John Jumbo](https://formulae.brew.sh/formula/john-jumbo). Installing both is optional.
+<sub>These are the official formulas for <a href="https://formulae.brew.sh/formula/hashcat">Hashcat</a> and <a href="https://formulae.brew.sh/formula/john-jumbo">John Jumbo</a>. Installing both is optional; one engine is enough.</sub>
 
-On Ubuntu or Debian, install Python and Hashcat using your package manager:
-
-```sh
-sudo apt update
-sudo apt install python3 python3-venv hashcat
-```
-
-Hashcat documents this [package installation route](https://hashcat.net/wiki/doku.php?id=frequently_asked_questions#how_do_i_install_hashcat), but distribution packages can lag upstream. For John, install **Jumbo**, which supports more formats and options than core John; a package named `john` does not necessarily provide Jumbo. Follow the [Openwall downloads and build instructions](https://www.openwall.com/john/) when your distribution does not provide a suitable build. Openwall recommends its current development snapshot over the older 1.9.0-jumbo-1 source release.
-
-On Windows (PowerShell), install Python 3.10+ and place `hashcat.exe` and/or John Jumbo (`john.exe`) on your `PATH`, or use WSL:
-
-```powershell
-py -3 -m venv .venv
-.\.venv\Scripts\Activate.ps1
-python -m pip install .
-hash-audit doctor
-hash-audit --help
-```
-
-From this project's directory on macOS or Linux:
+Then install Hash Audit from this folder:
 
 ```sh
+git clone https://github.com/xzchick/hash-audit.git
+cd hash-audit
 python3 -m venv .venv
 . .venv/bin/activate
 python -m pip install .
 hash-audit doctor
-hash-audit --help
 ```
 
-You can also run `python3 -m hash_audit` directly from the project directory without installing the package. Substitute it for `hash-audit` in the examples below.
+### 🪟 Windows
 
-Hashcat requires a compatible compute runtime. Use `hashcat -I` to inspect available devices; a listed device is not a guarantee that a recovery run will work. Follow the [Hashcat driver guidance](https://hashcat.net/wiki/doku.php?id=frequently_asked_questions#how_does_one_install_the_correct_driver_for_the_gpu_s). John Jumbo offers CPU implementations for the supported formats. The CLI does not install drivers, enable `--force`, or disable engine safety checks.
+Install Python 3.10+ and an engine, then put `hashcat.exe` and/or John Jumbo's `john.exe` on your `PATH` (or use WSL):
 
-## Try the included local demo
+```powershell
+winget install --id Python.Python.3.12 -e
+winget install --id hashcat.hashcat -e
+```
 
-The example files are synthetic. `examples/md5.txt`, `examples/sha256.txt`, and `examples/sha256-salted.txt` all use the known password `AuditDemo42!`. `examples/words.txt` includes that password.
+<sub>For John Jumbo on Windows, download a build from <a href="https://www.openwall.com/john/">Openwall</a> and add its folder to <code>PATH</code>, or run Hash Audit inside WSL with the Linux steps.</sub>
+
+Then install Hash Audit:
+
+```powershell
+git clone https://github.com/xzchick/hash-audit.git
+cd hash-audit
+py -3 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install .
+hash-audit doctor
+```
+
+> [!TIP]
+> If PowerShell blocks the activation script, run `Set-ExecutionPolicy -Scope Process Bypass` for that window only, then activate again.
+
+### 🐧 Linux
+
+Install Python, Hashcat and (for more formats) John Jumbo:
+
+| Distribution | Command |
+|---|---|
+| Ubuntu, Debian, Mint, Pop!_OS | `sudo apt update && sudo apt install -y python3 python3-venv hashcat` |
+| Fedora, RHEL, AlmaLinux, Rocky | `sudo dnf install -y python3 hashcat` |
+| Arch, Manjaro, EndeavourOS | `sudo pacman -S --needed python hashcat` |
+
+<sub>A distribution package named <code>john</code> may not be <b>Jumbo</b>, which supports far more formats. When yours isn't Jumbo, build it from the <a href="https://www.openwall.com/john/">Openwall sources</a>. Distribution Hashcat packages can also lag upstream.</sub>
+
+Then install Hash Audit:
+
+```sh
+git clone https://github.com/xzchick/hash-audit.git
+cd hash-audit
+python3 -m venv .venv
+. .venv/bin/activate
+python -m pip install .
+hash-audit doctor
+```
+
+### Run without installing
+
+From the project folder you can run the module directly, with no install step. Substitute it for `hash-audit` in any example:
+
+```sh
+python3 -m hash_audit --help
+```
+
+### Check your engines
+
+`doctor` reports which engines are on your `PATH` and gives next steps:
+
+```sh
+hash-audit doctor
+```
+
+It also reminds you that Hashcat needs a working compute device (check with `hashcat -I`) and that John needs a Jumbo build (check with `john --list=formats`).
+
+### Standalone bundles (coming with v0.1.0)
+
+The v0.1.0 release will include bundles that need **no Python** — you still install an engine yourself. They're a draft. When published, download them from **Releases**:
+
+| File | System |
+|---|---|
+| `hash-audit-v0.1.0-macos-arm64.tar.gz` | macOS on Apple Silicon |
+| `hash-audit-v0.1.0-windows-x86_64.zip` | Windows on 64-bit x86 |
+| `hash-audit-v0.1.0-linux-x86_64.tar.gz` | Linux on 64-bit x86 |
+| `local_hash_audit-0.1.0-py3-none-any.whl` | Any OS with Python 3.10+ (`pip`) |
+| `SHA256SUMS.txt` | Checksums for every file above |
+
+<details>
+<summary><b>Verify and run a bundle</b></summary>
+
+**macOS and Linux**
+
+```sh
+shasum -a 256 -c SHA256SUMS.txt
+tar -xzf hash-audit-v0.1.0-<os>-<arch>.tar.gz
+cd hash-audit-v0.1.0-<os>-<arch>
+sh ./install.sh
+~/.local/bin/hash-audit doctor
+```
+
+**Windows PowerShell**
+
+```powershell
+Get-FileHash .\hash-audit-v0.1.0-windows-x86_64.zip -Algorithm SHA256
+Get-Content .\SHA256SUMS.txt
+Expand-Archive .\hash-audit-v0.1.0-windows-x86_64.zip -DestinationPath .
+cd .\hash-audit-v0.1.0-windows-x86_64
+powershell -ExecutionPolicy Bypass -File .\install.ps1
+```
+
+</details>
+
+<a name="formats"></a>
+<img src="assets/readme/section-formats.svg" width="100%" alt="Formats: twenty-three supported" />
+
+Run `hash-audit formats` for the exact registry on your machine, or `hash-audit formats --json` for scripting. Detection reports **candidates**, not certainty: a bare hex digest can mean several algorithms, so pass an explicit `--format` even when only one candidate is listed.
+
+| Format family | CLI format keys | Engines |
+|---|---|---|
+| Raw digests | `md5`, `sha1`, `sha256`, `sha512`, `ntlm` | Hashcat · John Jumbo |
+| Legacy MySQL | `mysql323`, `mysql41` | Hashcat · John Jumbo |
+| Portable phpass (older WordPress/phpBB) | `phpass` | Hashcat · John Jumbo |
+| Modern WordPress bcrypt wrapper | `wordpress-bcrypt` | Hashcat (mode `35500`) |
+| bcrypt | `bcrypt` | Hashcat · John Jumbo |
+| Unix and Apache crypt | `md5crypt`, `apr1`, `sha256crypt`, `sha512crypt` | Hashcat · John Jumbo |
+| Django PBKDF2-SHA256 | `django-pbkdf2-sha256` | Hashcat · John Jumbo |
+| Digest of password + salt | `md5-pass-salt`, `sha1-pass-salt`, `sha256-pass-salt`, `sha512-pass-salt` | Hashcat |
+| Digest of salt + password | `md5-salt-pass`, `sha1-salt-pass`, `sha256-salt-pass`, `sha512-salt-pass` | Hashcat |
+
+That's 23 format keys. A few notes:
+
+- **Salted digests** use `hex_digest:literal_salt`. The salt is 1–256 printable ASCII characters with no colon; spaces are significant and it's never read as hex. The two orders (password+salt vs salt+password) look identical, so you choose the right one.
+- **MySQL** keys cover the legacy `mysql323` and `mysql41` schemes, not every modern MySQL auth plugin. A leading `*` on a 4.1/5 hash is handled for you.
+- **NTLM** here means the stored NT hash, not a network challenge-response capture.
+- **Modern WordPress** `$wp$2...` hashes use `wordpress-bcrypt` (Hashcat mode `35500`) and need a recent Hashcat; they are not plain bcrypt and must not be treated as such.
+- **Django** input is `pbkdf2_sha256$iterations$salt$digest`. The Hashcat adapter (mode `10000`) accepts up to 999,999 iterations; use John for higher counts.
+
+Format references: [Hashcat example hashes](https://hashcat.net/wiki/doku.php?id=example_hashes) and [John Jumbo format docs](https://github.com/openwall/john/tree/bleeding-jumbo/doc).
+
+### Input rules
+
+Pass a local ASCII text file with **one hash per line**, a single format per file. LF and CRLF both work and blank lines are ignored. Don't include usernames, emails, shadow-file records or CSV columns — split those out first. Limits: 16 MiB per file, 100,000 non-empty lines, 4,096 bytes per line.
+
+<a name="demo"></a>
+<img src="assets/readme/section-demo.svg" width="100%" alt="Try the demo with synthetic hashes" />
+
+The example files are synthetic. `examples/md5.txt`, `examples/sha256.txt` and `examples/sha256-salted.txt` all use the password `AuditDemo42!`, and `examples/words.txt` contains it.
 
 ```sh
 hash-audit formats
 hash-audit detect examples/md5.txt
+# preview the engine command without running anything or writing files
 hash-audit recover examples/md5.txt --format md5 --backend hashcat \
   --wordlist examples/words.txt --output-dir demo-md5 --dry-run
+# the real run, bounded to five minutes
 hash-audit recover examples/md5.txt --format md5 --backend hashcat \
   --wordlist examples/words.txt --output-dir demo-md5 --max-seconds 300
 hash-audit show demo-md5
 ```
 
-The first real run can spend time compiling engine kernels. Detection should list MD5 and NTLM as possibilities for this 32-character hexadecimal digest. `--format md5` supplies the known format rather than treating its appearance as proof.
+Detection lists MD5 and NTLM for this 32-character digest, which is why you pass `--format md5` rather than trusting the appearance. The first real run can spend time compiling engine kernels.
 
-To use John Jumbo instead:
+<details>
+<summary><b>John Jumbo, a salted digest and a PIN mask</b></summary>
+
+John Jumbo instead of Hashcat:
 
 ```sh
 hash-audit recover examples/sha256.txt --format sha256 --backend john \
@@ -79,7 +275,7 @@ hash-audit recover examples/sha256.txt --format sha256 --backend john \
 hash-audit show demo-john
 ```
 
-For a salted SHA-256 example, the construction is SHA-256 of the password bytes followed by the literal salt bytes `demo-salt`:
+A salted SHA-256 (digest of the password bytes followed by the literal salt `demo-salt`):
 
 ```sh
 hash-audit recover examples/sha256-salted.txt --format sha256-pass-salt \
@@ -87,93 +283,117 @@ hash-audit recover examples/sha256-salted.txt --format sha256-pass-salt \
   --output-dir demo-salted --max-seconds 300
 ```
 
-The included `examples/pin-md5.txt` hashes the toy PIN `0427`. A four-digit Hashcat mask covers 10,000 candidates:
+`examples/pin-md5.txt` hashes the toy PIN `0427`. A four-digit Hashcat mask covers all 10,000 candidates:
 
 ```sh
 hash-audit recover examples/pin-md5.txt --format md5 --backend hashcat \
   --mask '?d?d?d?d' --output-dir demo-pin --max-seconds 300
 ```
 
-Keep the mask in quotes so your shell does not interpret its question marks. Choose a fresh output directory for every real run.
+Keep masks in quotes so your shell doesn't expand the `?`. Mask tokens: `?l ?u ?d ?s ?a ?h ?H ?b` and `??` for a literal question mark.
 
-Masks must contain a character-set token such as `?d`, and are limited to 256 printable ASCII characters. Supported tokens are `?l`, `?u`, `?d`, `?s`, `?a`, `?h`, `?H`, `?b`, and `??` for a literal question mark. Use a wordlist for a single literal password.
+</details>
 
-## Input and format selection
+<a name="usage"></a>
+<img src="assets/readme/section-usage.svg" width="100%" alt="Recover and show: wordlists, masks, rules" />
 
-Pass a local ASCII text file containing one hash per line. LF and CRLF line endings are accepted, and empty lines are ignored. Keep a single format in each file. Do not include usernames, email addresses, shadow-file records, or CSV columns. Separate those fields before using this CLI. An email address is possible password input, not a distinct hash algorithm. Hash files are limited to 16 MiB, 100,000 nonempty lines, and 4,096 bytes per line.
+Five commands, the same on every system:
 
-```sh
-hash-audit detect my-hashes.txt
-hash-audit detect my-hashes.txt --json
-hash-audit formats --json
-```
+| Command | What it does |
+|---|---|
+| `hash-audit formats` | Lists the registry and each format's engine mapping (`--json` for machine output) |
+| `hash-audit detect FILE` | Shows candidate formats without printing the hashes (`--json` too) |
+| `hash-audit doctor` | Finds installed engines and prints diagnostic hints |
+| `hash-audit recover FILE …` | Runs a local wordlist or mask recovery |
+| `hash-audit show RUN_DIR` | Displays recovered secrets from a previous run |
 
-Detection reports **candidates**, not certainty. Bare hexadecimal digests can represent many algorithms; use an explicit `--format` even when the registry offers only one candidate. For a recognized, unambiguous format beginning with `$` or `*`, `--format auto` can select its registered format. Django inputs require `--format django-pbkdf2-sha256`. Every record is validated before an engine starts; mixed, malformed, unknown, or ambiguous inputs are rejected.
+`recover` options:
 
-The registry includes:
+| Option | Meaning |
+|---|---|
+| `--format KEY` | The hash format, or `auto` for an unambiguous `$`/`*` format (default `auto`) |
+| `--backend hashcat`&nbsp;\|&nbsp;`john` | Which engine to drive (default `hashcat`) |
+| `--wordlist PATH` | A candidate password list (required unless you pass `--mask`) |
+| `--mask '?d?d…'` | An inline Hashcat mask (Hashcat only) |
+| `--rules PATH` | A Hashcat rules file (needs `--wordlist`; Hashcat only) |
+| `--output-dir PATH` | A new run directory; its parent must already exist |
+| `--status-interval N` | Seconds between progress updates (default 5) |
+| `--max-seconds N` | A wall-clock budget, including engine startup |
+| `--dry-run` | Print the engine's argument list without writing files or running it |
 
-| Format family | CLI format keys | Engine availability |
-| --- | --- | --- |
-| Raw digests | `md5`, `sha1`, `sha256`, `sha512`, `ntlm` | Hashcat and John Jumbo |
-| Legacy MySQL | `mysql323`, `mysql41` | Hashcat and John Jumbo |
-| Portable phpass / older WordPress | `phpass` | Hashcat and John Jumbo |
-| Modern WordPress bcrypt wrapper | `wordpress-bcrypt` | Hashcat; requires mode `35500` |
-| bcrypt | `bcrypt` | Hashcat and John Jumbo |
-| Unix and Apache crypt | `md5crypt`, `apr1`, `sha256crypt`, `sha512crypt` | Hashcat and John Jumbo |
-| Django PBKDF2-SHA256 | `django-pbkdf2-sha256` | Hashcat and John Jumbo |
-| Digest of password then salt | `md5-pass-salt`, `sha1-pass-salt`, `sha256-pass-salt`, `sha512-pass-salt` | Hashcat |
-| Digest of salt then password | `md5-salt-pass`, `sha1-salt-pass`, `sha256-salt-pass`, `sha512-salt-pass` | Hashcat |
+`recover` needs either `--wordlist` or a Hashcat `--mask`. Press <kbd>Ctrl</kbd>+<kbd>C</kbd> to stop; a timeout or interruption shuts the engine down cleanly. A progress percentage reflects the candidate search, not the chance of recovering the password. Nothing is shown automatically after a run — use `hash-audit show` to read the results.
 
-Generic salted digests use `hex_digest:literal_salt`. The salt must contain 1–256 printable ASCII characters with no colon. Spaces in the salt are significant and preserved; salts are not interpreted as hexadecimal. Both concatenation orders have the same appearance, so the caller must select the correct one. This does not cover arbitrary application-specific encoding, HMAC, or repeated hashing.
+<a name="safety"></a>
+<img src="assets/readme/section-safety.svg" width="100%" alt="Safe and private: results stay yours" />
 
-MySQL 4.1/5 hashes can have an initial `*`; the CLI converts their representation for the chosen engine. `mysql323` and `mysql41` describe legacy schemes, not all current MySQL authentication schemes. NTLM here means the stored NT hash, not a network challenge-response capture. `phpass` handles `$P$` and `$H$` hashes. Modern WordPress `$wp$2...` wrappers use `wordpress-bcrypt` and need a Hashcat version that lists mode `35500` in its full help. They are not ordinary bcrypt and must not be stripped and treated as such. Older Hashcat releases may not support this mode.
+- **No shell is involved.** Hashes are passed to the engine through a normalized local file, not on the command line. `--dry-run` shows you the exact argument list first.
+- **Each run is isolated.** Every run gets its own directory with a private hash snapshot and a `run.json`. By default that's a unique folder under `hash-audit-runs/`; an explicit `--output-dir` must be new. The pot file is per-run, so results never leak in from a global cache.
+- **Results are locked down.** On macOS and Linux the run directory is `0700` and files are `0600`. On Windows an explicit NTFS ACL (`D:P`) limits access to your user SID, `SYSTEM` and `Administrators`.
+- **But not encrypted.** Recovered passwords sit in plain text in `recovered.pot` (and `recovered.txt` for Hashcat). Keep run folders out of shared drives and version control. Your OS, backups and engine caches may still retain data.
 
-Django PBKDF2-SHA256 input uses `pbkdf2_sha256$iterations$salt$digest`. The Hashcat adapter uses mode `10000` and accepts at most 999,999 iterations because some supported Hashcat versions impose a six-digit limit. Use John for higher iteration counts; its adapter adds the prefix John expects. Django salts are limited to a portable 1–31-character subset accepted by both engines.
+<a name="exit-codes"></a>
+<img src="assets/readme/section-exit.svg" width="100%" alt="Exit codes: what each one means" />
 
-Use `hash-audit formats` for the installed registry's exact engine identifiers. A recognized format still needs support in your installed engine version. Format references: [Hashcat example hashes](https://hashcat.net/wiki/doku.php?id=example_hashes) and [John Jumbo format documentation](https://github.com/openwall/john/tree/bleeding-jumbo/doc).
-
-## Recovery, progress, and results
-
-`recover` requires either `--wordlist PATH` or a Hashcat `--mask`. Use your own candidate list based on the password you are trying to recover. Wordlists are read in place, so keep the file unchanged during a run. The engines determine candidate encoding and any format-specific password-length limits.
-
-Hashcat dictionary recovery also accepts `--rules PATH` for a local Hashcat rule file. John recovery in this wrapper supports wordlists only; Hashcat masks and rule files are not passed to John.
-
-`--status-interval 5` controls periodic engine progress. `--max-seconds 300` bounds a run, including startup; without it there is no time limit. Press **Ctrl-C** to stop. Timeout or interruption triggers a graceful shutdown followed by bounded termination if needed. A percentage or ETA reflects the selected candidate search, not the probability of recovering the password.
-
-`--dry-run` validates and previews the engine invocation without starting recovery or creating files; it also works without an installed engine. No shell evaluates the invocation. Hash contents are supplied through a normalized local file rather than command-line arguments. Paths still appear in the process list and run metadata.
-
-Each run uses a new output directory, with a private normalized hash snapshot and `run.json` metadata. By default, the CLI creates a uniquely named directory under `hash-audit-runs`. An explicit `--output-dir` must be new and its parent directory must already exist. The engine writes recovered passwords to a separate `recovered.pot` file; Hashcat also writes `recovered.txt`. Empty or absent recovery files can mean no password was recovered. Results are not automatically displayed after recovery; display them using:
-
-```sh
-hash-audit show my-run-directory
-```
-
-The pot file is isolated per run, so results are not silently taken from a global password cache. There is no automatic resume command; start a new run with a new output directory. Interrupted engines may leave their own checkpoint files.
-
-Results, pot files, and terminal output can contain plaintext passwords. On POSIX systems the run directory is created with mode `0700` and files with mode `0600`; on Windows, explicit protected NTFS DACLs (`D:P`) restrict the run directory and wrapper-created job files to the current user SID, `SYSTEM`, and `Administrators`. These permissions do not encrypt the data. Keep results out of shared folders and version control. Engine or driver caches can still be stored in their standard system locations.
-
-| CLI exit code | Meaning |
-| --- | --- |
-| `0` | The engine completed successfully; this does not necessarily mean every password was recovered |
-| `2` | Invalid input, missing/unsupported engine, or backend failure |
+| Exit code | Meaning |
+|:---:|---|
+| `0` | The engine finished; this does **not** necessarily mean every password was recovered |
+| `2` | Invalid input, a missing or unsupported engine, or a backend failure |
 | `3` | Hashcat exhausted the selected candidates with hashes remaining |
-| `124` | The requested time limit was reached |
-| `130` | Interrupted by the user |
+| `124` | The `--max-seconds` time limit was reached |
+| `130` | Interrupted with <kbd>Ctrl</kbd>+<kbd>C</kbd> |
 
-John can exit successfully after exhausting its wordlist. Inspect its final progress and `show` output to determine what was recovered.
+John can exit `0` after exhausting its wordlist, so check its final progress and `hash-audit show` to see what was actually recovered.
 
-## Troubleshooting and checks
+<a name="troubleshooting"></a>
+<img src="assets/readme/section-troubleshoot.svg" width="100%" alt="Troubleshooting: quick fixes" />
 
-- **Ambiguous format:** supply the algorithm documented by the system that created the hashes. Digest length alone cannot establish it.
-- **No devices or compilation error:** check `hashcat -I` and the actual run's diagnostics, then follow the driver documentation. Try John Jumbo for a supported CPU format.
-- **Unknown John option or format:** inspect `john --list=build-info` and `john --list=formats`; install a suitable Jumbo build.
-- **No match:** confirm the complete hash and salt, construction, input encoding, and candidate list. Exhausting a list is not evidence the hash is invalid.
-- **Output directory already exists:** choose a new name. Existing results are never overwritten by `recover`.
+| Problem | Fix |
+|---|---|
+| `hashcat` or `john` not found | Install an engine, then run `hash-audit doctor`. On Windows, make sure the executable is on `PATH`. |
+| Ambiguous format | Pass the algorithm the source system documents. Digest length alone can't prove it. |
+| Hashcat: no devices or a compile error | Check `hashcat -I` and the run's diagnostics, then follow the driver docs. Try John Jumbo for a supported CPU format. |
+| Unknown John option or format | Inspect `john --list=build-info` and `john --list=formats`; install a Jumbo build. |
+| No match | Confirm the full hash and salt, the construction, the input encoding and your candidate list. Exhausting a list isn't proof the hash is invalid. |
+| "Output directory already exists" | Choose a new name. `recover` never overwrites existing results. |
+| PowerShell blocks activation | `Set-ExecutionPolicy -Scope Process Bypass`, then activate again. |
 
-Run the local test suite from the project directory:
+<a name="develop"></a>
+<img src="assets/readme/section-develop.svg" width="100%" alt="Develop and test" />
+
+Hash Audit has no third-party Python runtime dependencies. The test suite is the same on all three systems, and CI runs it on Ubuntu, Windows and macOS for every push.
 
 ```sh
 python3 -m unittest discover -s tests -v
 ```
 
-Engine behavior and options are documented in the [Hashcat command reference](https://hashcat.net/wiki/doku.php?id=hashcat) and [John Jumbo options](https://github.com/openwall/john/blob/bleeding-jumbo/doc/OPTIONS).
+<details>
+<summary><b>Build the release bundles locally</b></summary>
+
+```sh
+python -m pip install --upgrade pip build pyinstaller
+python scripts/build_release_bundle.py
+python scripts/smoke_test_release.py
+```
+
+To regenerate this README's artwork:
+
+```sh
+python scripts/render_readme_art.py
+```
+
+</details>
+
+<a name="more"></a>
+<img src="assets/readme/section-docs.svg" width="100%" alt="More" />
+
+| Document | What's inside |
+|---|---|
+| [SUMMARY.md](SUMMARY.md) | A short overview of features and limits |
+| [VALIDATION.md](VALIDATION.md) | What was tested, and what wasn't |
+| [RELEASE_NOTES.md](RELEASE_NOTES.md) | v0.1.0 bundles and checksums |
+
+### Validation at a glance
+
+39 automated tests pass, covering format validation, ambiguous inputs, shell-metacharacter paths, private output permissions, timeout and interruption cleanup, terminal-escape handling and job integrity. Real John Jumbo recovery was verified for 10 formats with synthetic hashes. Hashcat command generation and result parsing were checked, but full Hashcat recovery wasn't run in the build environment because it exposed no usable compute device. See [VALIDATION.md](VALIDATION.md) for the details and the formats that weren't exercised in a real run.
+
+<p align="center"><sub>MIT licensed. Hash Audit orchestrates Hashcat and John the Ripper Jumbo, which you install separately under their own licenses. Use it only with hashes you own or are authorized to test.</sub></p>
