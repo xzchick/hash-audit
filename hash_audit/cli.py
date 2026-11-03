@@ -15,9 +15,9 @@ import subprocess
 import sys
 import uuid
 
-from . import __version__
+from . import __version__, extractors
 from .backends import build_command, find_backend, run_command, safe_text, show_command
-from .formats import FORMATS, HashFormat, candidates, normalize, validate
+from .formats import CONTAINERS, FORMATS, HashFormat, candidates, lookup, normalize, validate
 
 MAX_HASH_BYTES = 16 * 1024 * 1024
 MAX_HASH_LINES = 100_000
@@ -90,9 +90,14 @@ def read_hashes(path: str | Path) -> list[tuple[int, str]]:
 
 def select_format(rows: list[tuple[int, str]], requested: str) -> HashFormat:
     if requested != "auto":
-        fmt = FORMATS[requested]
+        fmt = lookup(requested)
+        if fmt is None:
+            raise ValueError(f"unknown format: {requested}")
         invalid = [str(number) for number, value in rows if not validate(value, fmt)]
         if invalid:
+            if fmt.container:
+                raise ValueError(f"line(s) {', '.join(invalid[:8])} are not {fmt.key} hashes; "
+                                 f"extract them first with 'hash-audit extract FILE --type {fmt.key}'")
             raise ValueError(f"invalid {fmt.key} input at line(s) {', '.join(invalid[:8])}; "
                              "use one hash per line without usernames or comments")
         return fmt
@@ -413,12 +418,12 @@ def write_manifest(job: Path, value: dict, replace: bool = False) -> None:
         private_write(job / "run.json", data)
 
 
-def proposed_job(output: str | None) -> Path:
+def proposed_job(output: str | None, base: str = "hash-audit-runs", prefix: str = "run") -> Path:
     if output:
         path = clean_path(output)
     else:
         stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-        path = Path.cwd() / "hash-audit-runs" / f"run-{stamp}-{uuid.uuid4().hex[:8]}"
+        path = Path.cwd() / base / f"{prefix}-{stamp}-{uuid.uuid4().hex[:8]}"
     if path.exists() or path.is_symlink():
         raise ValueError(f"output directory already exists; choose a new path: {path}")
     return path
@@ -515,6 +520,66 @@ def recover(args: argparse.Namespace) -> int:
     return code
 
 
+def extract(args: argparse.Namespace) -> int:
+    source = regular_file(args.file)
+    if args.type != "auto":
+        key = args.type
+    else:
+        head = extractors.read_head(source)
+        found = extractors.detect(source, head)
+        if not found:
+            raise ValueError("could not identify the file type; pass --type "
+                             f"({', '.join(extractors.EXTRACTORS)})")
+        if len(found) > 1:
+            raise ValueError(f"file type is ambiguous ({', '.join(found)}); pass --type")
+        key = found[0]
+    extractor = extractors.EXTRACTORS[key]
+    container = CONTAINERS[key]
+    prefix = extractors.locate(extractor)
+    argv = (prefix or [extractor.tool]) + [str(source)]
+    recover_hint = (f"hash-audit recover OUTPUT/extracted.txt --format {key} "
+                    "--backend john --wordlist YOUR_WORDLIST")
+    if args.dry_run:
+        print(json.dumps({"dry_run": True, "type": key, "tool": extractor.tool,
+                          "located": prefix is not None, "argv": argv,
+                          "suggested_recovery": recover_hint}, indent=2, ensure_ascii=True))
+        return 0
+    if prefix is None:
+        raise ValueError(f"{extractor.tool} was not found. Install John the Ripper Jumbo, "
+                         "which ships the *2john helpers; see README.md.")
+    returncode, stdout, stderr = extractors.run_helper(argv, args.max_seconds or extractors.DEFAULT_TIMEOUT)
+    hashes = [line for line in extractors.hash_lines(stdout) if validate(line, container)]
+    if not hashes:
+        detail = safe_text(stderr.decode("utf-8", errors="replace").strip().splitlines()[-1]) if stderr.strip() else ""
+        if returncode != 0:
+            hint = f" ({detail})" if detail else ""
+            raise ValueError(f"the {extractor.tool} helper failed (exit {returncode}); "
+                             f"check the file and your John the Ripper Jumbo install{hint}")
+        hint = f" The helper reported: {detail}" if detail else ""
+        raise ValueError(f"no {key} password hash found in {source.name}; "
+                         f"is the file actually password-protected?{hint}")
+    job = proposed_job(args.output_dir, base="hash-audit-extracts", prefix="extract")
+    if not args.output_dir:
+        private_dir(job.parent)
+    elif not job.parent.is_dir():
+        raise ValueError("the output directory's parent must already exist")
+    job.mkdir(mode=0o700)
+    private_dir(job)
+    blob = ("\n".join(hashes) + "\n").encode("ascii")
+    private_write(job / "extracted.txt", blob)
+    manifest = {"schema_version": 1, "version": __version__, "kind": "extract",
+                "type": key, "tool": extractor.tool, "source": str(source),
+                "hash_count": len(hashes), "sha256": hashlib.sha256(blob).hexdigest(),
+                "created_utc": datetime.now(timezone.utc).isoformat()}
+    private_write(job / "extract.json", (json.dumps(manifest, indent=2, ensure_ascii=True) + "\n").encode())
+    out_file = job / "extracted.txt"
+    print(safe_text(f"{container.label}: extracted {len(hashes)} hash(es) to {out_file}"))
+    print("Recover it locally with your own wordlist:")
+    print(safe_text(f"  hash-audit recover {out_file} --format {key} --backend john --wordlist YOUR_WORDLIST"))
+    print("Only audit files you own or are authorized to test.")
+    return 0
+
+
 def detect(args: argparse.Namespace) -> int:
     rows = read_hashes(args.hash_file)
     results = [{"line": number, "candidates": [fmt.key for fmt in candidates(value)],
@@ -568,13 +633,14 @@ def show(args: argparse.Namespace) -> int:
         raise ValueError("unsupported job manifest")
     backend = manifest.get("backend")
     key = manifest.get("format")
-    if backend not in ("hashcat", "john") or not isinstance(key, str) or key not in FORMATS:
+    fmt = lookup(key) if isinstance(key, str) else None
+    if backend not in ("hashcat", "john") or fmt is None:
         raise ValueError("invalid backend or format in job manifest")
     snapshot = bounded_read(job / "hashes.txt", MAX_HASH_BYTES)
     if hashlib.sha256(snapshot).hexdigest() != manifest.get("snapshot_sha256"):
         raise ValueError("hash snapshot changed since this job was created")
     regular_file(job / "recovered.pot")
-    argv = show_command(backend, find_backend(backend), FORMATS[key], job / "hashes.txt", job)
+    argv = show_command(backend, find_backend(backend), fmt, job / "hashes.txt", job)
     result = run_command(argv, job, 5, 30)
     if result.timed_out:
         return 124
@@ -595,9 +661,16 @@ def parser() -> argparse.ArgumentParser:
     detection.add_argument("hash_file")
     detection.add_argument("--json", action="store_true")
     commands.add_parser("doctor", help="find installed engines and print diagnostic hints")
+    extraction = commands.add_parser("extract", help="extract a password hash from an encrypted file")
+    extraction.add_argument("file")
+    extraction.add_argument("--type", choices=["auto", *extractors.EXTRACTORS], default="auto",
+                            help="file type; detected from extension and contents by default")
+    extraction.add_argument("--output-dir", help="new private directory for the extracted hash; parent must exist")
+    extraction.add_argument("--max-seconds", type=positive_int, help="time limit for the extractor helper")
+    extraction.add_argument("--dry-run", action="store_true", help="show the helper command without running it")
     recovery = commands.add_parser("recover", help="run a local wordlist or mask recovery")
     recovery.add_argument("hash_file")
-    recovery.add_argument("--format", choices=["auto", *FORMATS], default="auto")
+    recovery.add_argument("--format", choices=["auto", *FORMATS, *CONTAINERS], default="auto")
     recovery.add_argument("--backend", choices=("hashcat", "john"), default="hashcat")
     attack = recovery.add_mutually_exclusive_group(required=True)
     attack.add_argument("--wordlist")
@@ -621,9 +694,14 @@ def main(argv: list[str] | None = None) -> int:
             else:
                 print(f"{'FORMAT':<25} {'HASHCAT':<9} {'JOHN':<20} DESCRIPTION")
                 for fmt in FORMATS.values():
-                    print(f"{fmt.key:<25} {fmt.hashcat_mode:<9} {fmt.john_format or '—':<20} {fmt.label}")
+                    mode = "—" if fmt.hashcat_mode is None else str(fmt.hashcat_mode)
+                    print(f"{fmt.key:<25} {mode:<9} {fmt.john_format or '—':<20} {fmt.label}")
+                print("\nFile types (extract a hash, then recover with --backend john):")
+                for fmt in CONTAINERS.values():
+                    print(f"{fmt.key:<25} {'—':<9} {'auto-detect':<20} {fmt.label}")
             return 0
-        return {"detect": detect, "doctor": doctor, "recover": recover, "show": show}[args.command](args)
+        return {"detect": detect, "doctor": doctor, "extract": extract,
+                "recover": recover, "show": show}[args.command](args)
     except (OSError, ValueError) as exc:
         print("Error: " + safe_text(str(exc)), file=sys.stderr)
         return 2

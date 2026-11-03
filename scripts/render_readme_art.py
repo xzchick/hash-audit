@@ -119,9 +119,9 @@ def hero():
     tx, ty, tw, th = 712, 60, 520, 312
     lines = [
         ('cmd', 'hash-audit doctor', 'hashcat: found · john: found'),
-        ('cmd', 'hash-audit detect audit.txt', 'candidates: md5, ntlm'),
-        ('cmd', 'hash-audit recover audit.txt --dry-run', 'engine command previewed · no files'),
-        ('cmd', 'hash-audit recover audit.txt --wordlist w.txt', 'results in hash-audit-runs/ · 0700'),
+        ('cmd', 'hash-audit extract report.zip', 'wrote $pkzip2$... · recover with john'),
+        ('cmd', 'hash-audit recover report.hash --dry-run', 'engine command previewed · no files'),
+        ('cmd', 'hash-audit recover report.hash --wordlist w.txt', 'results in hash-audit-runs/ · 0700'),
         ('cmd', 'hash-audit show last-run', 'recovered from this run only'),
     ]
     cycle = 20
@@ -333,7 +333,8 @@ SECTIONS = [
     ('compat', 'Works On', 'MACOS · WINDOWS · LINUX', 'grid', 'cyan'),
     ('install', 'Install', 'PYTHON OR STANDALONE', 'download', 'pink'),
     ('formats', 'Formats', 'TWENTY-THREE SUPPORTED', 'list', 'lavender'),
-    ('demo', 'Try The Demo', 'SYNTHETIC HASHES', 'flask', 'cyan'),
+    ('extract', 'Extract From Files', 'ZIP · RAR · KEEPASS', 'folder', 'cyan'),
+    ('demo', 'Try The Demo', 'SYNTHETIC HASHES', 'flask', 'pink'),
     ('usage', 'Recover & Show', 'WORDLISTS · MASKS · RULES', 'terminal', 'pink'),
     ('safety', 'Safe & Private', 'RESULTS STAY YOURS', 'lock', 'lavender'),
     ('exit', 'Exit Codes', 'WHAT EACH ONE MEANS', 'clock', 'cyan'),

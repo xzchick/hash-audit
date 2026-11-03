@@ -22,6 +22,7 @@ It validates hash files, identifies plausible formats and drives Hashcat or John
   <a href="#install"><b>Install</b></a> ·
   <a href="#works-on">Compatibility</a> ·
   <a href="#formats">Formats</a> ·
+  <a href="#extract">Extract</a> ·
   <a href="#demo">Demo</a> ·
   <a href="#usage">Recover</a> ·
   <a href="#safety">Safety</a> ·
@@ -56,6 +57,7 @@ It validates hash files, identifies plausible formats and drives Hashcat or John
 |---|:---:|:---:|:---:|
 | Format detection and validation | ✅ | ✅ | ✅ |
 | 23 registered hash formats | ✅ | ✅ | ✅ |
+| Extract hashes from files (ZIP, RAR, KeePass) | ✅ | ✅ | ✅ |
 | Dictionary (wordlist) recovery | ✅ | ✅ | ✅ |
 | Hashcat masks and rule files | ✅ | ✅ | ✅ |
 | John the Ripper Jumbo recovery | ✅ | ✅ | ✅ |
@@ -245,6 +247,31 @@ Format references: [Hashcat example hashes](https://hashcat.net/wiki/doku.php?id
 
 Pass a local ASCII text file with **one hash per line**, a single format per file. LF and CRLF both work and blank lines are ignored. Don't include usernames, emails, shadow-file records or CSV columns — split those out first. Limits: 16 MiB per file, 100,000 non-empty lines, 4,096 bytes per line.
 
+<a name="extract"></a>
+<img src="assets/readme/section-extract.svg" width="100%" alt="Extract a hash from an encrypted file" />
+
+Many passwords aren't stored as a loose hash — they protect a file. `extract` pulls the password hash out of an encrypted file using John Jumbo's bundled `*2john` helpers, then hands it to `recover`. Nothing is decrypted and nothing leaves your machine; the helper only reads the file and prints its hash.
+
+```sh
+# detect the type, run the right helper, write a private hash
+hash-audit extract report.zip
+# then recover it with your own wordlist (John auto-detects the exact variant)
+hash-audit recover hash-audit-extracts/extract-*/extracted.txt --format zip \
+  --backend john --wordlist YOUR_WORDLIST
+hash-audit show hash-audit-extracts/extract-*
+```
+
+| File type | `--type` | Helper | Recover with |
+|---|---|---|---|
+| ZIP archive (WinZip AES or PKZIP) | `zip` | `zip2john` | `--format zip --backend john` |
+| RAR archive (RAR3 or RAR5) | `rar` | `rar2john` | `--format rar --backend john` |
+| KeePass database (`.kdbx`) | `keepass` | `keepass2john` | `--format keepass --backend john` |
+
+The type is detected from the file's extension and magic bytes; pass `--type` to be explicit. The extracted hash keeps a sanitized `label:` prefix that John needs to load it, with the original filename trimmed out. These file hashes are recovered through **John**, which auto-detects the exact variant; they are not Hashcat modes here. Use `--dry-run` to see the helper command without running it.
+
+> [!NOTE]
+> Encrypted Office documents (`office2john`) and SSH private keys (`ssh2john`) are next. Their helpers are Python and ship as Python 2 on older John builds such as 1.9.0, so they need a current John Jumbo whose helpers are Python 3.
+
 <a name="demo"></a>
 <img src="assets/readme/section-demo.svg" width="100%" alt="Try the demo with synthetic hashes" />
 
@@ -303,6 +330,7 @@ Five commands, the same on every system:
 |---|---|
 | `hash-audit formats` | Lists the registry and each format's engine mapping (`--json` for machine output) |
 | `hash-audit detect FILE` | Shows candidate formats without printing the hashes (`--json` too) |
+| `hash-audit extract FILE` | Pulls a password hash out of an encrypted file (see [Extract](#extract)) |
 | `hash-audit doctor` | Finds installed engines and prints diagnostic hints |
 | `hash-audit recover FILE …` | Runs a local wordlist or mask recovery |
 | `hash-audit show RUN_DIR` | Displays recovered secrets from a previous run |
