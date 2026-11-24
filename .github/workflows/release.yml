@@ -9,6 +9,8 @@ on:
   push:
     tags:
       - 'v*'
+  # Manual dry run: builds, smoke-tests, writes the SBOM and signs, but publishes nothing.
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -81,7 +83,21 @@ jobs:
             --bundle dist/SHA256SUMS.txt.sigstore.json \
             dist/SHA256SUMS.txt
           echo "Signed SHA256SUMS.txt -> SHA256SUMS.txt.sigstore.json"
+      - name: Verify the signature
+        run: |
+          cosign verify-blob \
+            --bundle dist/SHA256SUMS.txt.sigstore.json \
+            --certificate-identity-regexp "https://github.com/${{ github.repository }}/.github/workflows/release.yml@.*" \
+            --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+            dist/SHA256SUMS.txt
+      - name: Keep the dry-run output
+        if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-dry-run
+          path: dist/*
       - name: Publish the release
+        if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
           files: dist/*
@@ -93,7 +109,7 @@ jobs:
     needs: build
     # Skipped (not failed) until the PyPI trusted publisher is registered. To turn it on:
     #   gh variable set PYPI_PUBLISH --body true
-    if: vars.PYPI_PUBLISH == 'true'
+    if: startsWith(github.ref, 'refs/tags/v') && vars.PYPI_PUBLISH == 'true'
     runs-on: ubuntu-latest
     permissions:
       id-token: write
