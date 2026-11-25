@@ -65,7 +65,7 @@ It validates hash files, identifies plausible formats and drives Hashcat or John
 | Private per-run results | `0700`/`0600` | NTFS ACL `D:P` | `0700`/`0600` |
 | Engine install route | Homebrew | `PATH` or WSL | `apt` / `dnf` |
 | No Python dependencies | ✅ | ✅ | ✅ |
-| Standalone bundle (draft v0.1.0) | arm64 | x86_64 | x86_64 |
+| Standalone bundle (v0.1.0) | arm64 | x86_64 | x86_64 |
 | Python package (`pip install .`) | ✅ | ✅ | ✅ |
 | Tested in CI on every push | ✅ | ✅ | ✅ |
 
@@ -179,9 +179,9 @@ hash-audit doctor
 
 It also reminds you that Hashcat needs a working compute device (check with `hashcat -I`) and that John needs a Jumbo build (check with `john --list=formats`).
 
-### Standalone bundles (coming with v0.1.0)
+### Standalone bundles
 
-The v0.1.0 release will include bundles that need **no Python** — you still install an engine yourself. They're a draft. When published, download them from **Releases**:
+The [v0.1.0 release](https://github.com/xzchick/hash-audit/releases/latest) has bundles that need **no Python**; you still install an engine yourself. Download them from **Releases**:
 
 | File | System |
 |---|---|

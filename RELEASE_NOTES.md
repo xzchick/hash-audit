@@ -1,4 +1,4 @@
-# Hash Audit v0.1.0 Release Notes (Draft / Pre-Release)
+# Hash Audit v0.1.0 Release Notes (early release)
 
 ## Overview
 Hash Audit is an offline, terminal-based hash auditing and password recovery CLI for owned or authorized hashes. It supports 23 hash formats across **Hashcat** and **John the Ripper Jumbo** on **macOS, Windows, and Linux**.
@@ -12,10 +12,12 @@ Each GitHub Release provides two distribution formats:
    - `hash-audit-v0.1.0-windows-x86_64.zip` — Windows 10/11 (`x86_64`) standalone `hash-audit.exe` + PowerShell installer + examples
    - `hash-audit-v0.1.0-linux-x86_64.tar.gz` — Linux (`x86_64`) standalone binary + installer + examples
 2. **Universal Python Packages (For Existing Python 3.10+ / `pip` / `uv` Environments):**
-   - `hash_audit-0.1.0-py3-none-any.whl` — Pure-Python wheel
-   - `hash_audit-0.1.0.tar.gz` — Source distribution
+   - `local_hash_audit-0.1.0-py3-none-any.whl` — Pure-Python wheel
+   - `local_hash_audit-0.1.0.tar.gz` — Source distribution
 3. **Checksums:**
-   - `SHA256SUMS.txt` — SHA-256 digests for every archive and package above
+   - `SHA256SUMS.txt` — SHA-256 digests for every archive, package and the SBOM
+   - `SHA256SUMS.txt.sigstore.json` — Sigstore (keyless) signature for `SHA256SUMS.txt`
+   - `sbom.cdx.json` — CycloneDX SBOM of every package inside the release
 
 > **External Recovery Engines:** Hash Audit orchestrates locally installed recovery engines (`hashcat` and/or John Jumbo `john`) on your `PATH`. Neither engine binaries nor wordlists/personal hashes are bundled.
 
@@ -23,7 +25,7 @@ Each GitHub Release provides two distribution formats:
 
 ### macOS and Linux
 ```sh
-shasum -a 256 -c SHA256SUMS.txt
+shasum -a 256 --ignore-missing -c SHA256SUMS.txt
 ```
 
 ### Windows PowerShell
